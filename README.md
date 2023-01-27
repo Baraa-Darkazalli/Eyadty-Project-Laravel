@@ -1,5 +1,5 @@
 # Eyadty
-Clinic Management System Project<br>
+## Clinic Management System Project<br>
 <br>
 EYADTY project,it is a medical clinics management system, the project contains an integrated system with roles for each of the doctors, patients, receptions and, of course, the admin.<br>
 The project mainly revolves around online appointments booking and electronic follow-up of appointmetns. It also contains a smart system to automatically displace appointments, as it automatically background checks the current appointments, and in the event that a patient is late, it cancels his appointment with a message of apology to the patient through notifications and sends a message to the affected patients with their appointments at the time of the new appointment.
