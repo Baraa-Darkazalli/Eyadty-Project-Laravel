@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+   <head>
+      <meta charset="utf-8"/>
+      <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover"/>
+      <meta name="description" content="Interactive entity-relationship diagram or data model diagram implemented by GoJS in JavaScript for HTML."/>
+      <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.6/tailwind.min.css"/>
+
+      <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/gojs/2.1.46/go.js"></script>
+      <script src="https://unpkg.com/gojs@2.1.47/extensions/Figures.js"></script>
+      <title>ERD</title>
+   </head>
+   <body class="bg-gray-100 tracking-wide bg-gray-200">
+        <nav class="bg-white py-2 ">
+            <div class="container px-4 mx-auto md:flex md:items-center">
+
+            <div class="flex justify-between items-center">
+                <a href="erd" class="font-bold text-xl text-indigo-600">ERD</a>
+            </div>
+
+                <div class="hidden md:flex flex-col md:flex-row md:ml-auto mt-3 md:mt-0" id="navbar-collapse">
+
+                    <a href="https://github.com/kevincobain2000/laravel-erd" class="p-2 lg:px-4 md:mx-2 text-indigo-600 text-center border border-solid border-indigo-600 rounded hover:bg-indigo-600 hover:text-white transition-colors duration-300 mt-1 md:mt-0 md:ml-1">Request Feature</a>
+                </div>
+            </div>
+        </nav>
+        <div id="app" v-cloak class="w-full flex lg:pt-10">
+            <aside class="text-xl text-grey-darkest break-all bg-gray-200 pl-2 h-screen sticky top-1 overflow-auto">
+                <b class="text-sm">Filter by Relation Type</b>
+                <div class="text-sm">
+                    <input type="checkbox" class="text-sm" id="input-relation-type-checkbox-check-all"> check all
+                </div>
+
+                <div id="filter-by-relation-type"></div>
+                <b class="text-sm">Filter by Table Name</b>
+                <div class="text-sm">
+                    <input type="checkbox" id="input-table-names-checkbox-check-all"> check all
+                </div>
+                <div id="filter-by-table-name"></div>
+            </aside>
+            <div class="ml-6 mr-6 pl-2 w-10/12 bg-gray-300 p-2">
+                <div id="myDiagramDiv" style="background-color: white; width: 100%; height: 95vh"></div>
+            </div>
+      </div>
+      <script>
+
+var nodeDataArray = [];
+var linkDataArray = [];
+var nodeDataArray = [];
+var linkDataArray = [];
+function init() {
+  var $ = go.GraphObject.make; // for conciseness in defining templates
+
+  myDiagram =
+      $(go.Diagram, "myDiagramDiv", // must name or refer to the DIV HTML element
+          {
+              allowDelete: false,
+              allowCopy: false,
+              layout: $(go.ForceDirectedLayout),
+              "undoManager.isEnabled": true
+          });
+
+  var itemTempl =
+      $(go.Panel, "Horizontal", // this Panel is a row in the containing Table
+          new go.Binding("portId", "name"), // this Panel is a "port"
+          {
+              background: "transparent", // so this port's background can be picked by the mouse
+              fromSpot: go.Spot.Right, // links only go from the right side to the left side
+              toSpot: go.Spot.Left,
+              // allow drawing links from or to this port:
+              fromLinkable: false,
+              toLinkable: false
+          },
+          $(go.Shape, {
+                  desiredSize: new go.Size(15, 15),
+                  strokeJoin: "round",
+                  strokeWidth: 3,
+                  stroke: null,
+                  margin: 2,
+                  // but disallow drawing links from or to this shape:
+                  fromLinkable: false,
+                  toLinkable: false
+              },
+              new go.Binding("figure", "figure"),
+              new go.Binding("stroke", "color"),
+              new go.Binding("fill", "color")),
+          $(go.TextBlock, {
+                  margin: new go.Margin(0, 5),
+                  column: 1,
+                  font: "13px sans-serif",
+                  alignment: go.Spot.Left,
+                  // and disallow drawing links from or to this text:
+                  fromLinkable: false,
+                  toLinkable: false
+              },
+              new go.Binding("text", "name")),
+          $(go.TextBlock, {
+                  margin: new go.Margin(0, 5),
+                  column: 2,
+                  font: "11px courier",
+                  alignment: go.Spot.Left
+              },
+              new go.Binding("text", "info"))
+      );
+
+  // define the Node template, representing an entity
+  myDiagram.nodeTemplate =
+      $(go.Node, "Auto", // the whole node panel
+          {
+              selectionAdorned: true,
+              resizable: true,
+              layoutConditions: go.Part.LayoutStandard & ~go.Part.LayoutNodeSized,
+              fromSpot: go.Spot.AllSides,
+              toSpot: go.Spot.AllSides,
+              isShadowed: true,
+              shadowOffset: new go.Point(3, 3),
+              shadowColor: "#C5C1AA"
+          },
+          new go.Binding("location", "location").makeTwoWay(),
+          // whenever the PanelExpanderButton changes the visible property of the "LIST" panel,
+          // clear out any desiredSize set by the ResizingTool.
+          new go.Binding("desiredSize", "visible", function(v) {
+              return new go.Size(NaN, NaN);
+          }).ofObject("LIST"),
+          // define the node's outer shape, which will surround the Table
+          $(go.Shape, "RoundedRectangle", {
+              fill: 'white',
+              stroke: "#eeeeee",
+              strokeWidth: 6
+          }),
+          $(go.Panel, "Table", {
+                  margin: 8,
+                  stretch: go.GraphObject.Fill
+              },
+              $(go.RowColumnDefinition, {
+                  row: 0,
+                  sizing: go.RowColumnDefinition.None
+              }),
+
+              // the table header
+              $(go.TextBlock, {
+                      row: 0,
+                      alignment: go.Spot.Left,
+                      margin: new go.Margin(0, 24, 0, 2), // leave room for Button
+                      font: "bold 16px sans-serif"
+                  },
+                  new go.Binding("text", "key")),
+              // the collapse/expand button
+              $("PanelExpanderButton", "LIST", // the name of the element whose visibility this button toggles
+                  {
+                      row: 0,
+                      alignment: go.Spot.TopRight
+                  }),
+              // the list of Panels, each showing an attribute
+              $(go.Panel, "Vertical", {
+                      name: "LIST",
+                      row: 1,
+                      padding: 3,
+                      alignment: go.Spot.TopLeft,
+                      defaultAlignment: go.Spot.Left,
+                      stretch: go.GraphObject.Horizontal,
+                      itemTemplate: itemTempl,
+                  },
+                  new go.Binding("itemArray", "schema"))
+          ) // end Table Panel
+      ); // end Node
+  // define the Link template, representing a relationship
+  myDiagram.linkTemplate =
+      $(go.Link, // the whole link panel
+          {
+              selectionAdorned: true,
+              layerName: "Foreground",
+              reshapable: true,
+              routing: go.Link.AvoidsNodes,
+              corner: 5,
+              curve: go.Link.Orthogonal,
+              curviness: 0,
+          },
+          $(go.Shape, // the link shape
+              {
+                  stroke: "#303B45",
+                  strokeWidth: 1.5,
+              }),
+          $(go.Shape, // the arrowhead
+              {
+                  toArrow: "Triangle",
+                  fill: "#1967B3"
+              }),
+          $(go.TextBlock, // the "from" label
+              {
+                  textAlign: "center",
+                  font: "bold 12px sans-serif",
+                  stroke: "#1967B3",
+                  segmentIndex: 1.5,
+                  segmentOffset: new go.Point(NaN, NaN),
+                  segmentOrientation: go.Link.Horizontal,
+                  fromLinkable: true,
+                  toLinkable: true
+              },
+              new go.Binding("text", "fromText")),
+
+          $(go.TextBlock, // the "to" label
+              {
+                  textAlign: "center",
+                  font: "bold 12px sans-serif",
+                  stroke: "#1967B3",
+                  segmentIndex: -10,
+                  segmentOffset: new go.Point(NaN, NaN),
+                  segmentOrientation: go.Link.OrientUpright,
+                  fromLinkable: true,
+                  toLinkable: true
+              },
+              new go.Binding("text", "toText"))
+      );
+
+  myDiagram.model = $(go.GraphLinksModel, {
+      copiesArrays: true,
+      copiesArrayObjects: true,
+      linkFromPortIdProperty: "fromPort",
+      linkToPortIdProperty: "toPort",
+      nodeDataArray: nodeDataArray,
+      linkDataArray: linkDataArray
+  });
+  loadFilterByTableNames()
+  loadFilterByRelationType()
+  setCheckboxesForTableNames();
+  setCheckboxesForRelationTypes();
+}
+
+
+function loadFilterByRelationType() {
+  var json = linkDataArray;
+  var appended = [];
+  $.each(json, function(i, v) {
+      // check if doesn't exist in the array
+      if ($.inArray(this.type, appended) == -1) {
+          // append
+          appended.push(this.type)
+          $("#filter-by-relation-type").append($("<div class='text-sm'>").text(this.type).prepend(
+              $("<input>").attr({
+                  'type': 'checkbox',
+                  'checked': true,
+                  'class': 'input-relation-type-checkbox',
+                  'name': 'subscribe-relation-type',
+                  "data-feed": this.type
+              }).val(this.type)
+              .prop('checked', this.checked)
+          ));
+      }
+  });
+  $(".input-relation-type-checkbox").on('change', function() {
+      setCheckboxesForTableNames()
+      setCheckboxesForRelationTypes()
+  });
+}
+
+function setCheckboxesForRelationTypes() {
+  newLinkDataArray = []
+
+  $(".input-relation-type-checkbox").each(function() {
+      if ($(this).prop('checked')) {
+          console.log($(this).val())
+          for (let i = 0; i < linkDataArray.length; i++) {
+              const element = linkDataArray[i];
+              if (element.type == $(this).val()) {
+                  newLinkDataArray.push(element)
+              }
+          }
+      }
+  });
+  myDiagram.model.linkDataArray = newLinkDataArray
+}
+
+function loadFilterByTableNames() {
+  var json = nodeDataArray;
+  var appended = [];
+  $.each(json, function(i, v) {
+      // check if doesn't exist in the array
+      if ($.inArray(this.key, appended) == -1) {
+          // append
+          appended.push(this.key)
+          $("#filter-by-table-name").append($("<div class='text-sm'>").text(this.key).prepend(
+              $("<input>").attr({
+                  'type': 'checkbox',
+                  'checked': true,
+                  'class': 'input-table-name-checkbox',
+                  'name': 'subscribe-table-name',
+                  "data-feed": this.key
+              }).val(this.key)
+              .prop('checked', this.checked)
+          ));
+      }
+  });
+
+  $(".input-table-name-checkbox").on('change', function() {
+      setCheckboxesForTableNames();
+      setCheckboxesForRelationTypes();
+  });
+}
+
+
+$("#input-relation-type-checkbox-check-all").on('change', function() {
+  $(".input-relation-type-checkbox").prop('checked', this.checked);
+  setCheckboxesForTableNames();
+  setCheckboxesForRelationTypes();
+});
+
+$("#input-table-names-checkbox-check-all").on('change', function() {
+  $(".input-table-name-checkbox").prop('checked', this.checked);
+  setCheckboxesForTableNames();
+  setCheckboxesForRelationTypes();
+});
+
+function setCheckboxesForTableNames() {
+  newNodeDataArray = []
+  newLinkDataArray = []
+
+  $(".input-table-name-checkbox").each(function() {
+      if ($(this).prop('checked')) {
+
+          for (let i = 0; i < nodeDataArray.length; i++) {
+              const element = nodeDataArray[i];
+              if (element.key == $(this).val()) {
+                  newNodeDataArray.push(element)
+              }
+          }
+          for (let i = 0; i < linkDataArray.length; i++) {
+              const element = linkDataArray[i];
+              if (element.from == $(this).val() || element.to == $(this).val()) {
+                  newLinkDataArray.push(element)
+              }
+          }
+      }
+  });
+  myDiagram.model.nodeDataArray = newNodeDataArray
+  myDiagram.model.linkDataArray = newLinkDataArray
+}
+
+var docs = "{\"link_data\":[{\"from\":\"appointments\",\"to\":\"clinics\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"clinic_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"appointments\",\"to\":\"doctors\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"doctor_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"appointments\",\"to\":\"patients\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"patient_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"appointments\",\"to\":\"receptions\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"reception_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"appointments\",\"to\":\"sessions\",\"fromText\":\"1..1\\nHas One\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"appointment_id\",\"type\":\"HasOne\"},{\"from\":\"appointments\",\"to\":\"appointment_statues\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"appointment_statue_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"appointment_statues\",\"to\":\"appointments\",\"fromText\":\"1..1\\nHas One\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"appointment_statue_id\",\"type\":\"HasOne\"},{\"from\":\"attendances\",\"to\":\"receptions\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"reception_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"balance_payments\",\"to\":\"payment_types\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"payment_type_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"balance_payments\",\"to\":\"employees\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"employee_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"blood_types\",\"to\":\"patients\",\"fromText\":\"1..*\\nHas Many\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"blood_type_id\",\"type\":\"HasMany\"},{\"from\":\"certificates\",\"to\":\"certificate_names\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"certificate_name_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"certificates\",\"to\":\"certificate_sources\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"certificate_source_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"certificates\",\"to\":\"certificate_ratings\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"certificate_rating_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"certificates\",\"to\":\"employees\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"employee_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"certificate_names\",\"to\":\"certificates\",\"fromText\":\"1..1\\nHas One\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"certificate_name_id\",\"type\":\"HasOne\"},{\"from\":\"certificate_ratings\",\"to\":\"certificates\",\"fromText\":\"1..*\\nHas Many\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"certificate_rating_id\",\"type\":\"HasMany\"},{\"from\":\"certificate_sources\",\"to\":\"certificates\",\"fromText\":\"1..1\\nHas One\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"certificate_source_id\",\"type\":\"HasOne\"},{\"from\":\"certificate_sources\",\"to\":\"countries\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"country_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"clinics\",\"to\":\"appointments\",\"fromText\":\"1..*\\nHas Many\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"clinic_id\",\"type\":\"HasMany\"},{\"from\":\"clinics\",\"to\":\"clinic_names\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"clinic_name_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"clinics\",\"to\":\"nurses\",\"fromText\":\"1..*\\nHas Many\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"clinic_id\",\"type\":\"HasMany\"},{\"from\":\"clinics\",\"to\":\"doctors\",\"fromText\":\"1..*\\nHas Many\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"clinic_id\",\"type\":\"HasMany\"},{\"from\":\"clinics\",\"to\":\"doctors\",\"fromText\":\"1..1\\nHas One\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"clinic_id\",\"type\":\"HasOne\"},{\"from\":\"clinics\",\"to\":\"sessions\",\"fromText\":\"1..*\\nHas Many\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"clinic_id\",\"type\":\"HasMany\"},{\"from\":\"clinics\",\"to\":\"nurses\",\"fromText\":\"1..1\\nHas One\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"clinic_id\",\"type\":\"HasOne\"},{\"from\":\"clinic_departments\",\"to\":\"clinic_names\",\"fromText\":\"1..*\\nHas Many\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"department_id\",\"type\":\"HasMany\"},{\"from\":\"clinic_names\",\"to\":\"clinics\",\"fromText\":\"1..*\\nHas Many\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"clinic_name_id\",\"type\":\"HasMany\"},{\"from\":\"clinic_names\",\"to\":\"clinic_departments\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"department_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"countries\",\"to\":\"certificate_sources\",\"fromText\":\"1..*\\nHas Many\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"country_id\",\"type\":\"HasMany\"},{\"from\":\"countries\",\"to\":\"previous_works\",\"fromText\":\"1..1\\nHas One\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"country_id\",\"type\":\"HasOne\"},{\"from\":\"clinic_departments\",\"to\":\"clinic_names\",\"fromText\":\"1..*\\nHas Many\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"department_id\",\"type\":\"HasMany\"},{\"from\":\"doctors\",\"to\":\"waitings\",\"fromText\":\"1..*\\nHas Many\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"doctor_id\",\"type\":\"HasMany\"},{\"from\":\"doctors\",\"to\":\"appointments\",\"fromText\":\"1..*\\nHas Many\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"doctor_id\",\"type\":\"HasMany\"},{\"from\":\"doctors\",\"to\":\"clinics\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"clinic_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"doctors\",\"to\":\"employees\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"employee_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"doctors\",\"to\":\"posts\",\"fromText\":\"1..*\\nHas Many\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"doctor_id\",\"type\":\"HasMany\"},{\"from\":\"doctors\",\"to\":\"vacation_requests\",\"fromText\":\"1..*\\nHas Many\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"doctor_id\",\"type\":\"HasMany\"},{\"from\":\"doctors\",\"to\":\"sessions\",\"fromText\":\"1..*\\nHas Many\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"doctor_id\",\"type\":\"HasMany\"},{\"from\":\"doctors\",\"to\":\"session_durations\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"session_duration_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"doctor_ratings\",\"to\":\"rating_doctor_values\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"rating_doctor_value_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"employees\",\"to\":\"people\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"person_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"employees\",\"to\":\"balance_payments\",\"fromText\":\"1..*\\nHas Many\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"employee_id\",\"type\":\"HasMany\"},{\"from\":\"employees\",\"to\":\"certificates\",\"fromText\":\"1..*\\nHas Many\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"employee_id\",\"type\":\"HasMany\"},{\"from\":\"employees\",\"to\":\"doctors\",\"fromText\":\"1..1\\nHas One\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"employee_id\",\"type\":\"HasOne\"},{\"from\":\"employees\",\"to\":\"previous_works\",\"fromText\":\"1..*\\nHas Many\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"employee_id\",\"type\":\"HasMany\"},{\"from\":\"employees\",\"to\":\"nurses\",\"fromText\":\"1..1\\nHas One\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"employee_id\",\"type\":\"HasOne\"},{\"from\":\"employees\",\"to\":\"malfunctions\",\"fromText\":\"1..*\\nHas Many\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"employee_id\",\"type\":\"HasMany\"},{\"from\":\"employees\",\"to\":\"receptions\",\"fromText\":\"1..1\\nHas One\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"employee_id\",\"type\":\"HasOne\"},{\"from\":\"extra_services\",\"to\":\"posts\",\"fromText\":\"1..*\\nHas Many\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"blog_id\",\"type\":\"HasMany\"},{\"from\":\"extra_treatments\",\"to\":\"session_calculations\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"session_calculation_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"logs\",\"to\":\"users\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"user_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"malfunctions\",\"to\":\"employees\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"employee_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"malfunctions\",\"to\":\"malfunction_statues\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"malfunction_statue_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"malfunction_statues\",\"to\":\"malfunctions\",\"fromText\":\"1..1\\nHas One\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"malfunction_statue_id\",\"type\":\"HasOne\"},{\"from\":\"medical_analyses\",\"to\":\"medical_analysis_names\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"medical_analysis_name_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"medical_analyses\",\"to\":\"prescriptions\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"prescription_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"medical_analysis_names\",\"to\":\"medical_analyses\",\"fromText\":\"1..1\\nHas One\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"medical_analysis_name_id\",\"type\":\"HasOne\"},{\"from\":\"medical_names\",\"to\":\"type_of_medicines\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"type_of_medicine_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"medical_names\",\"to\":\"medicines\",\"fromText\":\"1..1\\nHas One\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"medical_name_id\",\"type\":\"HasOne\"},{\"from\":\"medicines\",\"to\":\"medical_names\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"medical_name_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"medicines\",\"to\":\"prescriptions\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"prescription_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"names\",\"to\":\"people\",\"fromText\":\"1..*\\nHas Many\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"person_id\",\"type\":\"HasMany\"},{\"from\":\"notifications\",\"to\":\"users\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"user_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"nurses\",\"to\":\"clinics\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"clinic_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"nurses\",\"to\":\"employees\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"employee_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"patients\",\"to\":\"waitings\",\"fromText\":\"1..1\\nHas One\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"patient_id\",\"type\":\"HasOne\"},{\"from\":\"patients\",\"to\":\"people\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"person_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"patients\",\"to\":\"appointments\",\"fromText\":\"1..*\\nHas Many\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"patient_id\",\"type\":\"HasMany\"},{\"from\":\"patients\",\"to\":\"blood_types\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"blood_type_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"patients\",\"to\":\"sessions\",\"fromText\":\"1..*\\nHas Many\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"patient_id\",\"type\":\"HasMany\"},{\"from\":\"payment_types\",\"to\":\"balance_payments\",\"fromText\":\"1..1\\nHas One\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"payement_type_id\",\"type\":\"HasOne\"},{\"from\":\"people\",\"to\":\"phones\",\"fromText\":\"1..*\\nHas Many\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"person_id\",\"type\":\"HasMany\"},{\"from\":\"people\",\"to\":\"names\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"name_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"people\",\"to\":\"employees\",\"fromText\":\"1..1\\nHas One\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"person_id\",\"type\":\"HasOne\"},{\"from\":\"people\",\"to\":\"patients\",\"fromText\":\"1..1\\nHas One\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"person_id\",\"type\":\"HasOne\"},{\"from\":\"people\",\"to\":\"users\",\"fromText\":\"1..1\\nHas One\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"person_id\",\"type\":\"HasOne\"},{\"from\":\"phones\",\"to\":\"people\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"person_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"posts\",\"to\":\"doctors\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"doctor_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"posts\",\"to\":\"extra_services\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"blog_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"prescriptions\",\"to\":\"medical_analyses\",\"fromText\":\"1..*\\nHas Many\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"prescription_id\",\"type\":\"HasMany\"},{\"from\":\"prescriptions\",\"to\":\"medicines\",\"fromText\":\"1..*\\nHas Many\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"prescription_id\",\"type\":\"HasMany\"},{\"from\":\"prescriptions\",\"to\":\"sessions\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"session_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"previous_works\",\"to\":\"countries\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"country_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"previous_works\",\"to\":\"employees\",\"fromText\":\"1..*\\nHas Many\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"employee_id\",\"type\":\"HasMany\"},{\"from\":\"rating_doctor_values\",\"to\":\"doctor_ratings\",\"fromText\":\"1..1\\nHas One\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"rating_doctor_value_id\",\"type\":\"HasOne\"},{\"from\":\"receptions\",\"to\":\"appointments\",\"fromText\":\"1..*\\nHas Many\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"reception_id\",\"type\":\"HasMany\"},{\"from\":\"receptions\",\"to\":\"attendances\",\"fromText\":\"1..*\\nHas Many\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"reception_id\",\"type\":\"HasMany\"},{\"from\":\"receptions\",\"to\":\"employees\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"employee_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"receptions\",\"to\":\"session_calculations\",\"fromText\":\"1..*\\nHas Many\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"reception_id\",\"type\":\"HasMany\"},{\"from\":\"reports\",\"to\":\"users\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"user_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"sessions\",\"to\":\"appointments\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"appointment_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"sessions\",\"to\":\"clinics\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"clinic_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"sessions\",\"to\":\"doctors\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"doctor_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"sessions\",\"to\":\"patients\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"patient_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"sessions\",\"to\":\"prescriptions\",\"fromText\":\"1..1\\nHas One\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"session_id\",\"type\":\"HasOne\"},{\"from\":\"sessions\",\"to\":\"session_calculations\",\"fromText\":\"1..1\\nHas One\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"session_id\",\"type\":\"HasOne\"},{\"from\":\"session_calculations\",\"to\":\"receptions\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"reception_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"session_calculations\",\"to\":\"sessions\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"session_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"session_calculations\",\"to\":\"extra_treatments\",\"fromText\":\"1..*\\nHas Many\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"session_calculation_id\",\"type\":\"HasMany\"},{\"from\":\"session_durations\",\"to\":\"doctors\",\"fromText\":\"1..*\\nHas Many\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"session_duration_id\",\"type\":\"HasMany\"},{\"from\":\"type_of_medicines\",\"to\":\"medical_names\",\"fromText\":\"1..*\\nHas Many\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"type_of_medicine_id\",\"type\":\"HasMany\"},{\"from\":\"users\",\"to\":\"notifications\",\"fromText\":\"1..*\\nHas Many\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"user_id\",\"type\":\"HasMany\"},{\"from\":\"users\",\"to\":\"logs\",\"fromText\":\"1..*\\nHas Many\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"user_id\",\"type\":\"HasMany\"},{\"from\":\"users\",\"to\":\"reports\",\"fromText\":\"1..*\\nHas Many\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"user_id\",\"type\":\"HasMany\"},{\"from\":\"users\",\"to\":\"people\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"person_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"users\",\"to\":\"oauth_clients\",\"fromText\":\"1..*\\nHas Many\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"user_id\",\"type\":\"HasMany\"},{\"from\":\"users\",\"to\":\"oauth_access_tokens\",\"fromText\":\"1..*\\nHas Many\",\"toText\":\"\",\"fromPort\":\"id\",\"toPort\":\"user_id\",\"type\":\"HasMany\"},{\"from\":\"vacation_requests\",\"to\":\"doctors\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"doctor_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"},{\"from\":\"waitings\",\"to\":\"patients\",\"fromText\":\"1..1\\nBelongs To\",\"toText\":\"\",\"fromPort\":\"patient_id\",\"toPort\":\"id\",\"type\":\"BelongsTo\"}],\"node_data\":[{\"key\":\"allergies\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"name\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"allergy_patients\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"date\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"patient_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"allergy_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"appointments\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"appointment_date\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"is_review\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"appointment_time\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"doctor_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"patient_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"reception_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"appointment_statue_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"appointment_statues\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"name\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"attendances\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"reception_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"attendance_employees\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"absence_reasone\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"attendance_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"employee_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"balance_payments\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"balance\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"is_added\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"description\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"employee_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"payment_type_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"blood_types\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"name\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"certificates\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"certificate_date\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"certificate_name_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"certificate_source_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"certificate_rating_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"employee_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"certificate_names\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"name\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"certificate_ratings\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"name\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"certificate_sources\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"source_name\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"country_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"clinics\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"session_price\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"clinic_name_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"clinic_departments\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"name\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"clinic_names\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"name\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"department_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"countries\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"name\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"days\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"day\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"diseases\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"name\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"disease_patients\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"date\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"patient_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"disease_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"doctors\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"salary_rate\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"image\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"employee_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"clinic_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"session_duration_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"doctor_ratings\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"doctor_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"user_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"rating_doctor_value_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"employees\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"salary\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"previous_experience\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"person_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"extra_services\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"service_name\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"is_active\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"extra_treatments\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"treatment_name\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"item_price\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"treatment_price\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"description\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"session_calculation_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"like_posts\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"user_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"post_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"logs\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"subject\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"body\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"user_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"malfunctions\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"malfunction_name\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"employee_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"malfunction_statue_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"malfunction_statues\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"name\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"medical_analyses\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"descripton\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"prescription_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"medical_analysis_name_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"medical_analysis_names\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"name\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"medical_names\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"name\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"type_of_medicine_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"medicines\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"num_of_doses\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"dose_description\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"num_of_pieces\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"prescription_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"medical_name_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"names\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"first_name\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"last_name\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"father_name\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"notifications\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"title\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"body\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"user_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"notification_users\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"is_seen\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"deleted_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"user_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"notification_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"nurses\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"employee_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"clinic_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"patients\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"weight\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"height\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"person_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"blood_type_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"payment_types\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"name\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"permissions\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"name\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"display_name\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"description\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"people\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"gender\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"birth_date\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"personal_number\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"name_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"phones\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"phone_number\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"type\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"person_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"posts\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"post_subject\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"image\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"body\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"doctor_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"blog_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"prescriptions\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"session_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"previous_works\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"work_name\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"work_source\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"employee_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"country_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"rating_doctor_values\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"value\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"receptions\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"employee_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"reports\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"description\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"user_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"roles\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"name\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"display_name\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"description\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"seen_posts\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"user_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"post_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"sessions\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"descrtipion\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"is_review\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"title\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"session_date\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"session_start\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"session_end\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"clinic_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"doctor_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"patient_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"appointment_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"previous_session\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"session_calculations\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"is_paid\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"session_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"reception_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"session_durations\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"session_duration\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"type_of_medicines\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"name\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"users\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"password\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"email\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"username\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"current_lang\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"email_verified_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"remember_token\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"person_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"vacation_requests\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"vacation_date\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"vacation_reasone\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"is_accepted\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"employee_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"waitings\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"priority\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"patient_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"doctor_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"working_hours\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"start\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"end\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]},{\"key\":\"working_hour_days\",\"schema\":[]},{\"key\":\"working_hour_employees\",\"schema\":[{\"name\":\"id\",\"isKey\":true,\"figure\":\"Hexagon\",\"color\":\"#be4b15\",\"info\":\"\"},{\"name\":\"created_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"updated_at\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"working_hour_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"employee_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"},{\"name\":\"day_id\",\"isKey\":false,\"figure\":\"Decision\",\"color\":\"#6ea5f8\",\"info\":\"\"}]}]}"
+docs = JSON.parse(docs)
+nodeDataArray = docs.node_data
+linkDataArray = docs.link_data
+
+
+window.addEventListener('DOMContentLoaded', init);
+
+      </script>
+   </body>
+</html>
